@@ -1,4 +1,11 @@
 # Copyright (c) Facebook, Inc. and its affiliates.
+# Add local detectron2 to path
+import sys
+import os
+if os.path.join(os.path.dirname(__file__), "detectron2") not in sys.path:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "detectron2"))
+if os.path.join(os.path.dirname(os.path.dirname(__file__)), "detectron2") not in sys.path:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "detectron2"))
 import numpy as np
 import fvcore.nn.weight_init as weight_init
 import torch

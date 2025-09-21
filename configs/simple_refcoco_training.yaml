@@ -1,0 +1,90 @@
+# Simple Multitask Training Configuration
+# Train on RefCOCO testA split, validate on val split
+
+_BASE_: Base-COCO-InstanceSegmentation.yaml
+
+MODEL:
+  META_ARCHITECTURE: "GRES"  # Simple GRES model
+  
+  # Segmentation Head Configuration  
+  SEM_SEG_HEAD:
+    NAME: "ReferringHead"
+    IGNORE_VALUE: 255
+    NUM_CLASSES: 1  # Binary segmentation for referring expressions
+    LOSS_WEIGHT: 1.0
+    CONVS_DIM: 256
+    MASK_DIM: 256
+    NORM: "GN"
+    # pixel decoder
+    PIXEL_DECODER_NAME: "MSDeformAttnPixelDecoder"
+    IN_FEATURES: ["res2", "res3", "res4", "res5"]
+    DEFORMABLE_TRANSFORMER_ENCODER_IN_FEATURES: ["res3", "res4", "res5"]
+    COMMON_STRIDE: 4
+    TRANSFORMER_ENC_LAYERS: 6
+    
+  MASK_FORMER:
+    TRANSFORMER_DECODER_NAME: "MultiScaleMaskedReferringDecoder"
+    TRANSFORMER_IN_FEATURE: "multi_scale_pixel_decoder"
+    DEEP_SUPERVISION: True
+    LANG_ATT_WEIGHT: 0.1
+    NO_OBJECT_WEIGHT: 0.1
+    CLASS_WEIGHT: 2.0
+    MASK_WEIGHT: 5.0
+    DICE_WEIGHT: 5.0
+    HIDDEN_DIM: 256
+    NUM_OBJECT_QUERIES: 100
+    NHEADS: 8
+    DROPOUT: 0.0
+    DIM_FEEDFORWARD: 2048
+    ENC_LAYERS: 0
+    PRE_NORM: False
+    ENFORCE_INPUT_PROJ: False
+    SIZE_DIVISIBILITY: 32
+    DEC_LAYERS: 10
+    TRAIN_NUM_POINTS: 12544
+    OVERSAMPLE_RATIO: 3.0
+    IMPORTANCE_SAMPLE_RATIO: 0.75
+    TEST:
+      SEMANTIC_ON: False
+      INSTANCE_ON: True
+      PANOPTIC_ON: False
+      OVERLAP_THRESHOLD: 0.8
+      OBJECT_MASK_THRESHOLD: 0.8
+
+INPUT:
+  IMAGE_SIZE: 384  # Smaller for faster training
+  DATASET_MAPPER_NAME: "refcoco_mapper"
+
+DATASETS:
+  TRAIN: ("refcoco_unc_testA",)  # Train on testA split
+  TEST: ("refcoco_unc_val",)     # Validate on val split
+
+SOLVER:
+  IMS_PER_BATCH: 8   # Smaller batch size for initial testing
+  BASE_LR: 0.0001    # Conservative learning rate
+  STEPS: (15000, 25000)  # Shorter training for testing
+  MAX_ITER: 30000    # Reduced iterations for initial testing
+  WARMUP_ITERS: 1000
+  WARMUP_FACTOR: 0.001
+  WEIGHT_DECAY: 0.05
+  OPTIMIZER: "ADAMW"
+  
+  # Learning schedule
+  LR_SCHEDULER_NAME: "WarmupMultiStepLR"
+  
+  # Gradient clipping for stability
+  CLIP_GRADIENTS:
+    ENABLED: True
+    CLIP_TYPE: "value"
+    CLIP_VALUE: 0.01
+    NORM_TYPE: 2.0
+
+DATALOADER:
+  FILTER_EMPTY_ANNOTATIONS: True
+  NUM_WORKERS: 2  # Reduced for stability
+  SAMPLER_TRAIN: "TrainingSampler"
+  
+TEST:
+  EVAL_PERIOD: 2000  # Evaluate every 2000 iterations
+  
+OUTPUT_DIR: "./output/simple_refcoco_training"

@@ -3,6 +3,15 @@ GRES Training Script.
 
 This script is a simplified version of the training script in detectron2/tools.
 """
+
+# Add local detectron2 to path
+import sys
+import os
+if os.path.join(os.path.dirname(__file__), "detectron2") not in sys.path:
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "detectron2"))
+if os.path.join(os.path.dirname(os.path.dirname(__file__)), "detectron2") not in sys.path:
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(__file__)), "detectron2"))
+
 try:
     # ignore ShapelyDeprecationWarning from fvcore
     from shapely.errors import ShapelyDeprecationWarning
