@@ -92,11 +92,11 @@ SOLVER:
   # Learning schedule
   LR_SCHEDULER_NAME: "WarmupMultiStepLR"
 
-  # Gradient clipping for stability
+  # Gradient clipping for stability - Fixed values
   CLIP_GRADIENTS:
     ENABLED: True
-    CLIP_TYPE: "value"
-    CLIP_VALUE: 0.01
+    CLIP_TYPE: "norm"
+    CLIP_VALUE: 1.0
     NORM_TYPE: 2.0
 
   # Checkpointing

@@ -136,6 +136,11 @@ def load_humar_multitask_json(
                 obj = {key: instance[key] for key in ann_keys if key in instance}
                 obj["bbox_mode"] = BoxMode.XYWH_ABS
                 
+                # Convert category_id to 0-indexed (Detectron2 format)
+                # HuMAR uses COCO format where person=1, but detectron2 expects person=0
+                if "category_id" in obj:
+                    obj["category_id"] = 0  # Always map to person class (0-indexed)
+                
                 # Add referring expression information
                 obj["ref_id"] = ref_item["ref_id"]
                 obj["sentences"] = ref_item["sentences"]

@@ -45,12 +45,11 @@ class MultitaskDatasetMapper:
             cfg: config object
             is_train: whether we're in training mode
         """
-        if cfg.INPUT.CROP.ENABLED and is_train:
-            self.crop_gen = T.RandomCrop(cfg.INPUT.CROP.TYPE, cfg.INPUT.CROP.SIZE)
-        else:
-            self.crop_gen = None
+        # Disable crop augmentations
+        self.crop_gen = None
 
-        self.tfm_gens = utils.build_transform_gen(cfg, is_train)
+        # Disable most transform augmentations to avoid flip issues
+        self.tfm_gens = []  # No augmentations
         
         # Multitask specific settings
         self.enable_detection = cfg.MODEL.get("ENABLE_DETECTION", True)
@@ -64,6 +63,32 @@ class MultitaskDatasetMapper:
         
         self.is_train = is_train
         self.cfg = cfg
+    
+    def _get_keypoint_flip_indices(self):
+        """
+        Get keypoint flip indices for COCO format keypoints.
+        Returns the indices for flipping left/right keypoints during data augmentation.
+        """
+        # COCO keypoint flip map for horizontal flipping
+        # Format: [left_keypoint_idx, right_keypoint_idx]
+        flip_map = [
+            [1, 2],   # left_eye <-> right_eye
+            [3, 4],   # left_ear <-> right_ear
+            [5, 6],   # left_shoulder <-> right_shoulder
+            [7, 8],   # left_elbow <-> right_elbow
+            [9, 10],  # left_wrist <-> right_wrist
+            [11, 12], # left_hip <-> right_hip
+            [13, 14], # left_knee <-> right_knee
+            [15, 16], # left_ankle <-> right_ankle
+        ]
+        
+        # Create flip indices array
+        flip_indices = list(range(17))  # Initialize with identity mapping
+        for left_idx, right_idx in flip_map:
+            flip_indices[left_idx] = right_idx
+            flip_indices[right_idx] = left_idx
+        
+        return flip_indices
 
     def __call__(self, dataset_dict):
         """
@@ -100,15 +125,13 @@ class MultitaskDatasetMapper:
         if "annotations" not in dataset_dict:
             return dataset_dict
 
-        # Apply transforms to annotations
+        # Apply transforms to annotations (disable keypoint flipping)
         annos = [
             utils.transform_instance_annotations(
                 obj,
                 transforms, 
                 image_shape,
-                keypoint_hflip_indices=utils.create_keypoint_hflip_indices(
-                    MetadataCatalog.get(self.cfg.DATASETS.TRAIN[0]).keypoint_names
-                ) if self.keypoint_on else None,
+                keypoint_hflip_indices=None,  # Disable keypoint flipping to avoid errors
             )
             for obj in dataset_dict.pop("annotations")
         ]
@@ -160,6 +183,44 @@ class MultitaskDatasetMapper:
         # Add referring expression information if available
         if "sentences" in dataset_dict:
             dataset_dict["text"] = [sent["sent"] for sent in dataset_dict["sentences"]]
+        else:
+            # Provide default text if no referring expression
+            dataset_dict["text"] = ["person"]  # Default referring expression
+        
+        # Add language tokens for the model
+        # Use the first sentence as the referring expression
+        text = dataset_dict["text"][0] if dataset_dict["text"] else "person"
+        
+        # Simple tokenization - split by spaces and convert to dummy token IDs
+        # For a proper implementation, you'd use BERT tokenizer here
+        tokens = text.lower().split()
+        
+        # Create dummy token IDs (in a real implementation, use proper BERT tokenizer)
+        # For now, create a simple mapping
+        token_to_id = {
+            'person': 1, 'man': 2, 'woman': 3, 'child': 4, 'boy': 5, 'girl': 6,
+            'standing': 7, 'sitting': 8, 'walking': 9, 'running': 10,
+            'wearing': 11, 'holding': 12, 'carrying': 13,
+            'left': 14, 'right': 15, 'center': 16, 'front': 17, 'back': 18,
+            'red': 19, 'blue': 20, 'green': 21, 'black': 22, 'white': 23,
+            'shirt': 24, 'pants': 25, 'dress': 26, 'hat': 27, 'shoes': 28
+        }
+        
+        # Convert tokens to IDs (default to 0 for unknown tokens)
+        token_ids = [token_to_id.get(token, 0) for token in tokens]
+        
+        # Pad or truncate to fixed length (20 tokens as in config)
+        max_tokens = 20
+        if len(token_ids) < max_tokens:
+            token_ids.extend([0] * (max_tokens - len(token_ids)))  # Pad with 0
+        else:
+            token_ids = token_ids[:max_tokens]  # Truncate
+        
+        dataset_dict["lang_tokens"] = torch.tensor(token_ids, dtype=torch.long)
+        
+        # Create attention mask for language tokens (1 for real tokens, 0 for padding)
+        lang_mask = [1 if token_id > 0 else 0 for token_id in token_ids]
+        dataset_dict["lang_mask"] = torch.tensor(lang_mask, dtype=torch.bool)
         
         return dataset_dict
 

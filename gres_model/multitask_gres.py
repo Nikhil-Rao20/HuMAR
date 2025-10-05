@@ -25,7 +25,7 @@ from detectron2.structures import ImageList, Instances, BitMasks, Boxes
 from detectron2.utils.memory import retry_if_cuda_oom
 from detectron2.layers import Linear, ShapeSpec
 
-from ..modeling.criterion import ReferringCriterion
+from .modeling.criterion import ReferringCriterion
 
 
 # Import advanced heads

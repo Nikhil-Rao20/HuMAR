@@ -9,6 +9,7 @@ from .data.dataset_mappers.refcoco_mapper import RefCOCOMapper
 
 # models
 from .GRES import GRES
+from .multitask_gres import MultitaskGRES  # Import multitask model to register it
 
 # evaluation
 from .evaluation.refer_evaluation import ReferEvaluator

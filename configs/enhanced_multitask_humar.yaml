@@ -83,18 +83,24 @@ MODEL:
 
 INPUT:
   IMAGE_SIZE: 512  # Increased for better pose estimation
-  DATASET_MAPPER_NAME: "humar_multitask"  # Our custom multitask mapper
+  DATASET_MAPPER_NAME: "multitask_humar"  # Use custom multitask mapper
+  # Disable data augmentations
+  RANDOM_FLIP: "none"  # Disable random flipping
+  MIN_SIZE_TRAIN: (512,)  # Fixed size, no random resizing
+  MAX_SIZE_TRAIN: 512
+  MIN_SIZE_TEST: 512
+  MAX_SIZE_TEST: 512
 
 DATASETS:
-  TRAIN: ("humar_train",)
-  TEST: ("humar_val",)
+  TRAIN: ("humar_multitask_train",)
+  TEST: ("humar_multitask_val",)
 
 SOLVER:
-  IMS_PER_BATCH: 16  # Reduced for multitask complexity
+  IMS_PER_BATCH: 8  # Reduced batch size for testB dataset
   BASE_LR: 0.0001   # Slightly higher for multitask learning
-  STEPS: (80000, 120000)
-  MAX_ITER: 150000
-  WARMUP_ITERS: 1000
+  STEPS: (5000, 8000)  # Reduced steps for smaller dataset
+  MAX_ITER: 10000   # Much shorter training for testB
+  WARMUP_ITERS: 500
   WARMUP_FACTOR: 0.001
   WEIGHT_DECAY: 0.05
   OPTIMIZER: "ADAMW"
@@ -117,6 +123,6 @@ DATALOADER:
   SAMPLER_TRAIN: "TrainingSampler"
   
 TEST:
-  EVAL_PERIOD: 5000  # Evaluate every 5000 iterations
+  EVAL_PERIOD: 1000  # Evaluate more frequently for shorter training
   
 OUTPUT_DIR: "./output/enhanced_multitask_humar"
