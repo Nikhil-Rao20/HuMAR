@@ -80,7 +80,7 @@ DATASETS:
   TEST: ("humar_gref_testB",)   # Validate on testB split as requested
 
 SOLVER:
-  IMS_PER_BATCH: 8   # Batch size - adjust based on GPU memory
+  IMS_PER_BATCH: 2   # Reduced batch size for 6GB GPU (was 8)
   BASE_LR: 0.0001    # Conservative learning rate for initial training
   STEPS: (15, 25)    # Learning rate decay steps (at 10 and 16.7 epochs)
   MAX_ITER: 30       # Total training iterations (~20 epochs with 12 images)
@@ -88,6 +88,8 @@ SOLVER:
   WARMUP_FACTOR: 0.001
   WEIGHT_DECAY: 0.05
   OPTIMIZER: "ADAMW"
+  AMP:
+    ENABLED: True  # Enable automatic mixed precision for memory savings
 
   # Learning schedule
   LR_SCHEDULER_NAME: "WarmupMultiStepLR"

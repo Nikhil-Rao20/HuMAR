@@ -4,13 +4,25 @@ Trains on configured split, validates on configured split
 Shows 3 losses + 3 performance metrics on progress bar
 """
 
+# Suppress all warnings FIRST before any imports
+import warnings
+warnings.filterwarnings('ignore')
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
+os.environ['PYTHONWARNINGS'] = 'ignore'
+
 # Add local detectron2 to path
 import sys
-import os
 if os.path.join(os.path.dirname(__file__), "detectron2") not in sys.path:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), "detectron2"))
 
 import logging
+logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger('matplotlib').setLevel(logging.ERROR)
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+logging.getLogger('PIL').setLevel(logging.ERROR)
+
 import time
 import csv
 from collections import OrderedDict
@@ -21,9 +33,15 @@ import torch
 import torch.nn as nn
 from tqdm import tqdm
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend to suppress warnings
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.animation import FuncAnimation
+
+# Suppress matplotlib font warnings
+import matplotlib.font_manager
+matplotlib.font_manager._log.setLevel(logging.ERROR)
 
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer
@@ -59,7 +77,7 @@ class CSVLogger:
                 'det_acc', 'seg_iou', 'pose_acc', 'learning_rate', 'time_per_iter'
             ])
         
-        print(f"📊 CSV logging to: {self.csv_path}")
+        print(f" CSV logging to: {self.csv_path}")
     
     def log_metrics(self, iteration, losses, metrics, lr=0.0, time_per_iter=0.0):
         """Log metrics to CSV file"""
@@ -89,25 +107,25 @@ class TrainingVisualizer:
         plt.style.use('seaborn-v0_8' if 'seaborn-v0_8' in plt.style.available else 'default')
         self.fig, ((self.ax1, self.ax2), (self.ax3, self.ax4)) = plt.subplots(2, 2, figsize=(15, 10))
         
-        self.fig.suptitle('🚀 Multitask Training Progress', fontsize=16, fontweight='bold')
+        self.fig.suptitle('Multitask Training Progress', fontsize=16, fontweight='bold')
         
         # Configure subplots
-        self.ax1.set_title('📉 Training Losses')
+        self.ax1.set_title('Training Losses')
         self.ax1.set_xlabel('Iteration')
         self.ax1.set_ylabel('Loss')
         self.ax1.grid(True, alpha=0.3)
         
-        self.ax2.set_title('📊 Task Performance Metrics')
+        self.ax2.set_title('Task Performance Metrics')
         self.ax2.set_xlabel('Iteration')
         self.ax2.set_ylabel('Accuracy/IoU')
         self.ax2.grid(True, alpha=0.3)
         
-        self.ax3.set_title('🎯 Individual Task Losses')
+        self.ax3.set_title('Individual Task Losses')
         self.ax3.set_xlabel('Iteration')
         self.ax3.set_ylabel('Loss')
         self.ax3.grid(True, alpha=0.3)
         
-        self.ax4.set_title('📈 Training Progress Overview')
+        self.ax4.set_title('Training Progress Overview')
         self.ax4.set_xlabel('Iteration')
         self.ax4.set_ylabel('Normalized Value')
         self.ax4.grid(True, alpha=0.3)
@@ -118,7 +136,7 @@ class TrainingVisualizer:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.plot_path = os.path.join(output_dir, f"training_plot_{timestamp}.png")
         
-        print(f"📈 Visualization plots will be saved to: {self.plot_path}")
+        print(f" Visualization plots will be saved to: {self.plot_path}")
     
     def update(self, iteration, losses, metrics):
         """Update plots with new data"""
@@ -140,7 +158,7 @@ class TrainingVisualizer:
         
         # Plot 1: Total Loss
         self.ax1.plot(self.iterations, self.losses['total'], 'b-', linewidth=2, label='Total Loss')
-        self.ax1.set_title('📉 Total Training Loss')
+        self.ax1.set_title(' Total Training Loss')
         self.ax1.set_xlabel('Iteration')
         self.ax1.set_ylabel('Loss')
         self.ax1.grid(True, alpha=0.3)
@@ -150,7 +168,7 @@ class TrainingVisualizer:
         self.ax2.plot(self.iterations, self.metrics['det_acc'], 'r-', label='Detection Acc', linewidth=2)
         self.ax2.plot(self.iterations, self.metrics['seg_iou'], 'g-', label='Segmentation IoU', linewidth=2)
         self.ax2.plot(self.iterations, self.metrics['pose_acc'], 'b-', label='Pose Accuracy', linewidth=2)
-        self.ax2.set_title('📊 Task Performance Metrics')
+        self.ax2.set_title(' Task Performance Metrics')
         self.ax2.set_xlabel('Iteration')
         self.ax2.set_ylabel('Accuracy/IoU')
         self.ax2.grid(True, alpha=0.3)
@@ -161,7 +179,7 @@ class TrainingVisualizer:
         self.ax3.plot(self.iterations, self.losses['det'], 'r--', label='Detection Loss', linewidth=2)
         self.ax3.plot(self.iterations, self.losses['seg'], 'g--', label='Segmentation Loss', linewidth=2)
         self.ax3.plot(self.iterations, self.losses['pose'], 'b--', label='Pose Loss', linewidth=2)
-        self.ax3.set_title('🎯 Individual Task Losses')
+        self.ax3.set_title(' Individual Task Losses')
         self.ax3.set_xlabel('Iteration')
         self.ax3.set_ylabel('Loss')
         self.ax3.grid(True, alpha=0.3)
@@ -173,7 +191,7 @@ class TrainingVisualizer:
         
         self.ax4.bar(['Progress', 'Avg Performance'], [progress, avg_metric], 
                     color=['skyblue', 'lightgreen'], alpha=0.7)
-        self.ax4.set_title('📈 Training Progress Overview')
+        self.ax4.set_title(' Training Progress Overview')
         self.ax4.set_ylabel('Normalized Value')
         self.ax4.set_ylim(0, 1)
         self.ax4.grid(True, alpha=0.3)
@@ -189,16 +207,16 @@ class TrainingVisualizer:
             try:
                 plt.savefig(self.plot_path, dpi=300, bbox_inches='tight')
             except Exception as e:
-                print(f"⚠️  Warning: Could not save plot: {e}")
+                print(f"  Warning: Could not save plot: {e}")
     
     def save_final_plot(self):
         """Save the final training plot"""
         try:
             final_path = self.plot_path.replace('.png', '_final.png')
             plt.savefig(final_path, dpi=300, bbox_inches='tight')
-            print(f"🎉 Final training plot saved to: {final_path}")
+            print(f" Final training plot saved to: {final_path}")
         except Exception as e:
-            print(f"⚠️  Warning: Could not save final plot: {e}")
+            print(f"  Warning: Could not save final plot: {e}")
 
 class TqdmEventWriter(EventWriter):
     """Custom event writer that updates tqdm progress bar"""
@@ -391,7 +409,7 @@ class SimpleMultitaskTrainer(DefaultTrainer):
         # Create tqdm progress bar with more detailed info
         self.pbar = tqdm(
             total=self.cfg.SOLVER.MAX_ITER,
-            desc="🚀 Training Multitask ReLA",
+            desc=" Training Multitask ReLA",
             unit="iter",
             ncols=200,
             position=0,
@@ -403,11 +421,11 @@ class SimpleMultitaskTrainer(DefaultTrainer):
         self.tqdm_writer = TqdmEventWriter(self.pbar, self.csv_logger)
         
         # Print initial training info
-        print(f"\n🎯 TRAINING STARTED!")
-        print(f"📊 Total Iterations: {self.cfg.SOLVER.MAX_ITER}")
-        print(f"💾 Checkpoint Every: {self.cfg.SOLVER.CHECKPOINT_PERIOD} iterations")
-        print(f"🔄 Evaluation Every: {self.cfg.TEST.EVAL_PERIOD} iterations")
-        print(f"🎛️  Batch Size: {self.cfg.SOLVER.IMS_PER_BATCH}")
+        print(f"\n TRAINING STARTED!")
+        print(f" Total Iterations: {self.cfg.SOLVER.MAX_ITER}")
+        print(f" Checkpoint Every: {self.cfg.SOLVER.CHECKPOINT_PERIOD} iterations")
+        print(f" Evaluation Every: {self.cfg.TEST.EVAL_PERIOD} iterations")
+        print(f"  Batch Size: {self.cfg.SOLVER.IMS_PER_BATCH}")
         print("Progress bar shows: Iter | Loss | LR | Time/iter | ETA")
         print("-"*80)
         
@@ -472,7 +490,7 @@ class SimpleMultitaskTrainer(DefaultTrainer):
             # Print detailed progress every 5 iterations
             if (current_iter + 1) % 5 == 0:
                 elapsed_time = time.time() - self.start_time
-                print(f"\n📊 Iteration {current_iter + 1}/{self.cfg.SOLVER.MAX_ITER} | "
+                print(f"\n Iteration {current_iter + 1}/{self.cfg.SOLVER.MAX_ITER} | "
                       f"Loss: {total_loss:.4f} | LR: {lr:.6f} | "
                       f"Time: {step_time:.2f}s/iter | Elapsed: {elapsed_time/60:.1f}min")
                 
@@ -497,10 +515,10 @@ class SimpleMultitaskTrainer(DefaultTrainer):
         
         # Print completion message
         total_time = time.time() - self.start_time
-        print(f"\n🎉 Multitask training completed!")
-        print(f"⏱️  Total training time: {total_time/60:.1f} minutes")
-        print(f"📊 Training logs saved to: {self.csv_logger.csv_path if self.csv_logger else 'N/A'}")
-        print(f"📈 Training plots saved to: {self.visualizer.plot_path if self.visualizer else 'N/A'}")
+        print(f"\n Multitask training completed!")
+        print(f"  Total training time: {total_time/60:.1f} minutes")
+        print(f" Training logs saved to: {self.csv_logger.csv_path if self.csv_logger else 'N/A'}")
+        print(f" Training plots saved to: {self.visualizer.plot_path if self.visualizer else 'N/A'}")
 
 def setup(args):
     """Setup configuration for training"""
@@ -556,7 +574,7 @@ def main(args):
         
         # Register the HuMAR-GREF datasets
         register_humar_gref_datasets()
-        print("✓ HuMAR-GREF datasets registered successfully")
+        print(" HuMAR-GREF datasets registered successfully")
         
         # Verify registration - get datasets from config
         from detectron2.data import DatasetCatalog, MetadataCatalog
@@ -568,26 +586,26 @@ def main(args):
         # Extract split names from dataset names
         train_split = train_dataset_name.replace("humar_gref_", "")
         test_split = test_dataset_name.replace("humar_gref_", "")
-        print(f"✓ Loaded {len(train_data)} {train_split} samples and {len(test_data)} {test_split} samples")
+        print(f" Loaded {len(train_data)} {train_split} samples and {len(test_data)} {test_split} samples")
         
     except Exception as e:
-        print(f"❌ Failed to register HuMAR-GREF datasets: {e}")
+        print(f" Failed to register HuMAR-GREF datasets: {e}")
         import traceback
         traceback.print_exc()
         return
 
     print("\n" + "="*70)
-    print("🚀 SIMPLE MULTITASK ReLA TRAINING")
+    print(" SIMPLE MULTITASK ReLA TRAINING")
     print("="*70)
-    print(f"📁 Output Directory: {cfg.OUTPUT_DIR}")
-    print(f"🎯 Tasks: Detection + Segmentation + Referring Expression")
-    print(f"📊 Dataset: HuMAR-GREF")
-    print(f"🏋️  Training Split: {train_split}")
-    print(f"✅ Validation Split: {test_split}")
-    print(f"⚙️  Max Iterations: {cfg.SOLVER.MAX_ITER}")
-    print(f"🎛️  Batch Size: {cfg.SOLVER.IMS_PER_BATCH}")
-    print(f"📈 Base Learning Rate: {cfg.SOLVER.BASE_LR}")
-    print(f"🔄 Evaluation Every: {cfg.TEST.EVAL_PERIOD} iterations")
+    print(f" Output Directory: {cfg.OUTPUT_DIR}")
+    print(f" Tasks: Detection + Segmentation + Referring Expression")
+    print(f" Dataset: HuMAR-GREF")
+    print(f"  Training Split: {train_split}")
+    print(f" Validation Split: {test_split}")
+    print(f"  Max Iterations: {cfg.SOLVER.MAX_ITER}")
+    print(f"  Batch Size: {cfg.SOLVER.IMS_PER_BATCH}")
+    print(f" Base Learning Rate: {cfg.SOLVER.BASE_LR}")
+    print(f" Evaluation Every: {cfg.TEST.EVAL_PERIOD} iterations")
     print("="*70)
     
     if args.eval_only:
@@ -595,11 +613,11 @@ def main(args):
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
-        print("🔍 Starting evaluation...")
+        print(" Starting evaluation...")
         res = SimpleMultitaskTrainer.test(cfg, model)
         return res
 
-    print("🏗️  Building trainer...")
+    print("  Building trainer...")
     trainer = SimpleMultitaskTrainer(cfg)
     trainer.resume_or_load(resume=args.resume)
     
@@ -607,7 +625,7 @@ def main(args):
 
 if __name__ == "__main__":
     args = default_argument_parser().parse_args()
-    print("🎮 Command Line Args:", args)
+    print(" Command Line Args:", args)
     launch(
         main,
         args.num_gpus,
