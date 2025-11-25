@@ -146,6 +146,23 @@ class RobertaTokenizer(nn.Module):
         return self.tokenizer.batch_encode_plus(texts, padding='longest', return_tensors='pt')
 
 
+class MiniLMTokenizer(nn.Module):
+    """Tokenizer for MiniLM model (sentence-transformers/all-MiniLM-L6-v2)"""
+    def __init__(self):
+        super(MiniLMTokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts, 
+            padding='longest', 
+            max_length=128,  # MiniLM typical max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
 _tokenizer = SimpleTokenizer()
 # example: word_vec = tokenize(["a photo of cat", "a dog"], self.word_length, True).squeeze(0)
 def tokenize(texts: Union[str, List[str]],
