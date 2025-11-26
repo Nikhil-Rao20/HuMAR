@@ -34,7 +34,7 @@ class TextEncoder(nn.Module):
         super(TextEncoder, self).__init__()
         self.args = args
         self.hidden_dim = args.hidden_dim
-        self.text_backbone_name = "MiniLM"  # Options: "MiniLM" or "Roberta"
+        self.text_backbone_name = "Roberta"  # Options: "MiniLM" or "Roberta"
         self.token_size = 32
         if self.text_backbone_name == "MiniLM":
             # Using sentence-transformers/all-MiniLM-L6-v2 (23M params, 384 dim)
