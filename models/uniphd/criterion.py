@@ -137,33 +137,66 @@ class SetCriterion(nn.Module):
         """Compute the losses related to the masks: the focal loss and the dice loss.
            targets dicts must contain the key "masks" containing a tensor of dim [nb_target_boxes, h, w]
         """
-        assert "pred_masks" in outputs
-        src_masks = outputs["pred_masks"]
-        src_masks_low = outputs["pred_masks_low"]
+        # Skip mask loss if no masks in outputs (e.g., for auxiliary outputs)
+        if "pred_masks" not in outputs:
+            return {}
+            
+        indices = indices[0]
+        src_masks = outputs["pred_masks"]  # [batch_size, num_queries, H, W]
+        
+        # Get matched indices
+        src_idx = self._get_src_permutation_idx(indices)
+        
         # future use valid to mask invalid areas due to padding in loss
         target_masks, valid = nested_tensor_from_tensor_list([t["masks"] for t in targets]).decompose()
-        target_masks = target_masks.to(src_masks_low)
+        target_masks = target_masks.to(src_masks.device)
+        
+        # Get only the matched target masks
+        tgt_idx = self._get_tgt_permutation_idx(indices)
+        target_masks = target_masks[tgt_idx]
 
-        start = int(self.mask_out_stride // 2)
-        start_low = int(self.mask_out_stride_low // 2)
-        im_h, im_w = target_masks.shape[-2:]
-        target_masks_low = target_masks[:, :, start_low::self.mask_out_stride_low, start_low::self.mask_out_stride_low]
-        target_masks = target_masks[:, :, start::self.mask_out_stride, start::self.mask_out_stride]
+        # Convert to float immediately after selection
+        target_masks = target_masks.float()
 
-        assert target_masks.size(2) * self.mask_out_stride == im_h
-        assert target_masks.size(3) * self.mask_out_stride == im_w
+        # Resize target masks to match prediction size
+        if target_masks.shape[-2:] != src_masks.shape[-2:]:
+            target_masks = F.interpolate(target_masks.unsqueeze(1), size=src_masks.shape[-2:], mode='nearest').squeeze(1)
+        
+        # Get only the matched predicted masks
+        src_masks = src_masks[src_idx]
 
         src_masks = src_masks.flatten(1)
         target_masks = target_masks.flatten(1)
-
-        src_masks_low = src_masks_low.flatten(1)
-        target_masks_low = target_masks_low.flatten(1)
+        
         losses = {
             "loss_mask": sigmoid_focal_loss(src_masks, target_masks, num_boxes),
             "loss_dice": dice_loss(src_masks, target_masks, num_boxes),
-            "loss_mask_low": sigmoid_focal_loss(src_masks_low, target_masks_low, num_boxes),
-            "loss_dice_low": dice_loss(src_masks_low, target_masks_low, num_boxes)
         }
+        
+        # Add low resolution mask loss if available
+        if "pred_masks_low" in outputs:
+            src_masks_low = outputs["pred_masks_low"]
+            
+            # Get original target masks again
+            target_masks_low, _ = nested_tensor_from_tensor_list([t["masks"] for t in targets]).decompose()
+            target_masks_low = target_masks_low.to(src_masks_low.device)
+            target_masks_low = target_masks_low[tgt_idx]
+            
+            # Convert to float
+            target_masks_low = target_masks_low.float()
+            
+            # Resize to match low resolution predictions
+            if target_masks_low.shape[-2:] != src_masks_low.shape[-2:]:
+                target_masks_low = F.interpolate(target_masks_low.unsqueeze(1), size=src_masks_low.shape[-2:], mode='nearest').squeeze(1)
+            
+            # Get matched predictions
+            src_masks_low = src_masks_low[src_idx]
+            
+            src_masks_low = src_masks_low.flatten(1)
+            target_masks_low = target_masks_low.flatten(1)
+            losses["loss_mask_low"] = sigmoid_focal_loss(src_masks_low, target_masks_low, num_boxes)
+            losses["loss_dice_low"] = dice_loss(src_masks_low, target_masks_low, num_boxes)
+        
         return losses
 
     @torch.no_grad()
@@ -205,6 +238,7 @@ class SetCriterion(nn.Module):
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
 
         # loss for final layer
+        # print('Output Type', outputs.keys(), targets[0].keys())
         indices = outputs['main_indices']
         losses = {}
         for loss in self.losses:

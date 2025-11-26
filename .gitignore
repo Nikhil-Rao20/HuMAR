@@ -3,7 +3,8 @@
 datasets/RefHuman/
 
 # Python cache
-**/__pycache__/
+__pycache__/
+datasets/__pycache__/
 *.py[cod]
 *$py.class
 *.so

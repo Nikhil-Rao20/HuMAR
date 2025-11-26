@@ -73,71 +73,131 @@ class SLConfig(object):
         except SyntaxError:
             raise SyntaxError('There are syntax errors in config '
                               f'file {filename}')
-
     @staticmethod
     def _file2dict(filename):
         filename = osp.abspath(osp.expanduser(filename))
         check_file_exist(filename)
+
+        # -------------------------------
+        # Windows-safe: load config directly
+        # -------------------------------
         if filename.lower().endswith('.py'):
-            with tempfile.TemporaryDirectory() as temp_config_dir:
-                temp_config_file = tempfile.NamedTemporaryFile(
-                    dir=temp_config_dir, suffix='.py')
-                temp_config_name = osp.basename(temp_config_file.name)
-                shutil.copyfile(filename,
-                                osp.join(temp_config_dir, temp_config_name))
-                temp_module_name = osp.splitext(temp_config_name)[0]
-                sys.path.insert(0, temp_config_dir)
-                SLConfig._validate_py_syntax(filename)
-                mod = import_module(temp_module_name)
-                sys.path.pop(0)
-                cfg_dict = {
-                    name: value
-                    for name, value in mod.__dict__.items()
-                    if not name.startswith('__')
-                }
-                # delete imported module
-                del sys.modules[temp_module_name]
-                # close temp file
-                temp_config_file.close()
+            SLConfig._validate_py_syntax(filename)
+
+            import types
+            module = types.ModuleType("config_module")
+            module.__file__ = filename
+
+            try:
+                with open(filename, "r", encoding="utf-8") as f:
+                    code = f.read()
+                exec(compile(code, filename, "exec"), module.__dict__)
+            except Exception as e:
+                raise RuntimeError(f"Failed to execute config file: {filename}") from e
+
+            cfg_dict = {
+                name: value for name, value in module.__dict__.items()
+                if not name.startswith("__")
+            }
+
         elif filename.lower().endswith(('.yml', '.yaml', '.json')):
             from .slio import slload
             cfg_dict = slload(filename)
         else:
             raise IOError('Only py/yml/yaml/json type are supported now!')
 
-        cfg_text = filename + '\n'
-        with open(filename, 'r') as f:
-            cfg_text += f.read()
+        with open(filename, 'r', encoding='utf-8') as f:
+            cfg_text = filename + '\n' + f.read()
 
-        # parse the base file
+        # ----- Handle _base_ configs recursively -----
         if BASE_KEY in cfg_dict:
             cfg_dir = osp.dirname(filename)
             base_filename = cfg_dict.pop(BASE_KEY)
-            base_filename = base_filename if isinstance(
-                base_filename, list) else [base_filename]
+            base_filename = base_filename if isinstance(base_filename, list) else [base_filename]
 
-            cfg_dict_list = list()
-            cfg_text_list = list()
+            cfg_dict_list, cfg_text_list = [], []
+
             for f in base_filename:
                 _cfg_dict, _cfg_text = SLConfig._file2dict(osp.join(cfg_dir, f))
                 cfg_dict_list.append(_cfg_dict)
                 cfg_text_list.append(_cfg_text)
 
-            base_cfg_dict = dict()
+            base_cfg_dict = {}
             for c in cfg_dict_list:
                 if len(base_cfg_dict.keys() & c.keys()) > 0:
-                    raise KeyError('Duplicate key is not allowed among bases')
-                    # TODO Allow the duplicate key while warnning user
+                    raise KeyError("Duplicate keys among base configs.")
                 base_cfg_dict.update(c)
 
-            base_cfg_dict = SLConfig._merge_a_into_b(cfg_dict, base_cfg_dict)
-            cfg_dict = base_cfg_dict
-
-            # merge cfg_text
+            cfg_dict = SLConfig._merge_a_into_b(cfg_dict, base_cfg_dict)
             cfg_text_list.append(cfg_text)
             cfg_text = '\n'.join(cfg_text_list)
 
         return cfg_dict, cfg_text
+
+    # @staticmethod
+    # def _file2dict(filename):
+    #     filename = osp.abspath(osp.expanduser(filename))
+    #     check_file_exist(filename)
+    #     if filename.lower().endswith('.py'):
+    #         with tempfile.TemporaryDirectory() as temp_config_dir:
+    #             temp_config_file = tempfile.NamedTemporaryFile(
+    #                 dir=temp_config_dir, suffix='.py')
+    #             temp_config_name = osp.basename(temp_config_file.name)
+    #             shutil.copyfile(filename,
+    #                             osp.join(temp_config_dir, temp_config_name))
+    #             temp_module_name = osp.splitext(temp_config_name)[0]
+    #             sys.path.insert(0, temp_config_dir)
+    #             SLConfig._validate_py_syntax(filename)
+    #             mod = import_module(temp_module_name)
+    #             sys.path.pop(0)
+    #             cfg_dict = {
+    #                 name: value
+    #                 for name, value in mod.__dict__.items()
+    #                 if not name.startswith('__')
+    #             }
+    #             # delete imported module
+    #             del sys.modules[temp_module_name]
+    #             # close temp file
+    #             temp_config_file.close()
+    #     elif filename.lower().endswith(('.yml', '.yaml', '.json')):
+    #         from .slio import slload
+    #         cfg_dict = slload(filename)
+    #     else:
+    #         raise IOError('Only py/yml/yaml/json type are supported now!')
+
+    #     cfg_text = filename + '\n'
+    #     with open(filename, 'r') as f:
+    #         cfg_text += f.read()
+
+    #     # parse the base file
+    #     if BASE_KEY in cfg_dict:
+    #         cfg_dir = osp.dirname(filename)
+    #         base_filename = cfg_dict.pop(BASE_KEY)
+    #         base_filename = base_filename if isinstance(
+    #             base_filename, list) else [base_filename]
+
+    #         cfg_dict_list = list()
+    #         cfg_text_list = list()
+    #         for f in base_filename:
+    #             _cfg_dict, _cfg_text = SLConfig._file2dict(osp.join(cfg_dir, f))
+    #             cfg_dict_list.append(_cfg_dict)
+    #             cfg_text_list.append(_cfg_text)
+
+    #         base_cfg_dict = dict()
+    #         for c in cfg_dict_list:
+    #             if len(base_cfg_dict.keys() & c.keys()) > 0:
+    #                 raise KeyError('Duplicate key is not allowed among bases')
+    #                 # TODO Allow the duplicate key while warnning user
+    #             base_cfg_dict.update(c)
+
+    #         base_cfg_dict = SLConfig._merge_a_into_b(cfg_dict, base_cfg_dict)
+    #         cfg_dict = base_cfg_dict
+
+    #         # merge cfg_text
+    #         cfg_text_list.append(cfg_text)
+    #         cfg_text = '\n'.join(cfg_text_list)
+
+    #     return cfg_dict, cfg_text
 
     @staticmethod
     def _merge_a_into_b(a, b):

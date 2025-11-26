@@ -386,6 +386,23 @@ class UniPHD(nn.Module):
         out = {'pred_logits': outputs_class[-1], 'pred_keypoints': outputs_keypoints_list[-1],
                'pred_keypoints_visi': outputs_keypoints_visi_list[-1], 'pred_boxes': outputs_box[-1]}
 
+        # Add Hungarian matching indices for criterion
+        if self.training or targets is not None:
+            with torch.no_grad():
+                outputs_without_aux = {k: v for k, v in out.items() if k != 'aux_outputs'}
+                main_indices = self.matcher(outputs_without_aux, targets)
+                out['main_indices'] = main_indices
+                
+                # For auxiliary outputs
+                if self.aux_loss:
+                    aux_outputs = self._set_aux_loss(outputs_class, outputs_keypoints_list, outputs_keypoints_visi_list, outputs_box)
+                    aux_indices = []
+                    for aux_out in aux_outputs:
+                        aux_idx = self.matcher(aux_out, targets)
+                        aux_indices.append(aux_idx)
+                    out['aux_outputs'] = aux_outputs
+                    out['aux_indices'] = aux_indices
+
         if self.mask_pred:
             tar_h, tar_w = memory[0].shape[-2:]
             mask_features = sum([F.interpolate(x, size=(tar_h, tar_w), mode="bicubic", align_corners=False) for x in memory])  # b c h w
@@ -599,7 +616,10 @@ def build_uniphd(args):
 
     backbone = build_backbone(args)
     transformer = build_transformer(args)
-    matcher = None
+    
+    # Build matcher
+    from .matcher import build_matcher
+    matcher = build_matcher(args)
 
     model = UniPHD(
         args,
