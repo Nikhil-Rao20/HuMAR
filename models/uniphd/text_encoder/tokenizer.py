@@ -163,6 +163,57 @@ class MiniLMTokenizer(nn.Module):
         )
 
 
+class DistilBERTTokenizer(nn.Module):
+    """Tokenizer for DistilBERT (distilbert/distilbert-base-uncased)"""
+    def __init__(self):
+        super(DistilBERTTokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("distilbert/distilbert-base-uncased")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts,
+            padding='longest',
+            max_length=512,  # DistilBERT max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
+class TinyBERTTokenizer(nn.Module):
+    """Tokenizer for TinyBERT (huawei-noah/TinyBERT_General_4L_312D)"""
+    def __init__(self):
+        super(TinyBERTTokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("huawei-noah/TinyBERT_General_4L_312D")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts,
+            padding='longest',
+            max_length=512,  # TinyBERT max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
+class TiTeLATETokenizer(nn.Module):
+    """Tokenizer for TiTe-LATE (webis/tite-2-late-msmarco)"""
+    def __init__(self):
+        super(TiTeLATETokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("webis/tite-2-late-msmarco")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts,
+            padding='longest',
+            max_length=512,  # TiTe-LATE max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
 _tokenizer = SimpleTokenizer()
 # example: word_vec = tokenize(["a photo of cat", "a dog"], self.word_length, True).squeeze(0)
 def tokenize(texts: Union[str, List[str]],

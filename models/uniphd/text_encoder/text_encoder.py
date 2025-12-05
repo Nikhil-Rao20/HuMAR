@@ -6,8 +6,13 @@ import torch
 from torch import nn, Tensor
 from transformers import AutoModel
 from transformers import RobertaModel  # Original RoBERTa (commented out)
-from models.uniphd.text_encoder.tokenizer import MiniLMTokenizer
-from models.uniphd.text_encoder.tokenizer import RobertaTokenizer  # Original (commented out)
+from models.uniphd.text_encoder.tokenizer import (
+    MiniLMTokenizer, 
+    DistilBERTTokenizer, 
+    TinyBERTTokenizer, 
+    TiTeLATETokenizer,
+    RobertaTokenizer  # Original (commented out)
+)
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -34,18 +39,43 @@ class TextEncoder(nn.Module):
         super(TextEncoder, self).__init__()
         self.args = args
         self.hidden_dim = args.hidden_dim
-        self.text_backbone_name = "Roberta"  # Options: "MiniLM" or "Roberta"
+        self.text_backbone_name = "DistilBERT"  # Options: "MiniLM", "DistilBERT", "TinyBERT", "TiTeLATE", "Roberta"
         self.token_size = 32
+        
         if self.text_backbone_name == "MiniLM":
             # Using sentence-transformers/all-MiniLM-L6-v2 (23M params, 384 dim)
             self.text_backbone = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
             self.tokenizer = MiniLMTokenizer()
             self.feat_dim = 384  # MiniLM output dimension
+            self.use_mean_pooling = True
+            
+        elif self.text_backbone_name == "DistilBERT":
+            # Using distilbert/distilbert-base-uncased (66M params, 768 dim)
+            self.text_backbone = AutoModel.from_pretrained("distilbert/distilbert-base-uncased")
+            self.tokenizer = DistilBERTTokenizer()
+            self.feat_dim = 768  # DistilBERT output dimension
+            self.use_mean_pooling = True  # DistilBERT uses mean pooling (no pooler)
+            
+        elif self.text_backbone_name == "TinyBERT":
+            # Using huawei-noah/TinyBERT_General_4L_312D (14.5M params, 312 dim)
+            self.text_backbone = AutoModel.from_pretrained("huawei-noah/TinyBERT_General_4L_312D")
+            self.tokenizer = TinyBERTTokenizer()
+            self.feat_dim = 312  # TinyBERT output dimension
+            self.use_mean_pooling = False  # TinyBERT has pooler
+            
+        elif self.text_backbone_name == "TiTeLATE":
+            # Using webis/tite-2-late-msmarco (lightweight BERT variant, 768 dim)
+            self.text_backbone = AutoModel.from_pretrained("webis/tite-2-late-msmarco")
+            self.tokenizer = TiTeLATETokenizer()
+            self.feat_dim = 768  # TiTe-LATE output dimension
+            self.use_mean_pooling = False  # TiTe-LATE has pooler
+            
         elif self.text_backbone_name == "Roberta":  # Original RoBERTa (commented out)
             self.text_backbone = RobertaModel.from_pretrained("roberta-base")
             # self.text_backbone.pooler = None  # this pooler is never used, this is a hack to avoid DDP problems...
             self.tokenizer = RobertaTokenizer()
             self.feat_dim = 768
+            self.use_mean_pooling = False
         else:
             assert False, f'error: Text Encoder "{self.text_backbone_name}" is not supported'
 
@@ -63,36 +93,32 @@ class TextEncoder(nn.Module):
         if self.freeze_text_encoder:
             with torch.no_grad():
                 tokenized_queries = self.tokenizer(texts).to(device)
-                if self.text_backbone_name == "MiniLM":
-                    encoded_text = self.text_backbone(**tokenized_queries)
-                    text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
-                    text_features = encoded_text.last_hidden_state
-                    # MiniLM uses mean pooling for sentence embeddings
+                encoded_text = self.text_backbone(**tokenized_queries)
+                text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
+                text_features = encoded_text.last_hidden_state
+                
+                # Choose pooling strategy based on model type
+                if self.use_mean_pooling:
+                    # Models without pooler: MiniLM, DistilBERT
                     text_sentence_features = self._mean_pooling(encoded_text.last_hidden_state, 
                                                                  tokenized_queries.attention_mask)
-                elif self.text_backbone_name == "Roberta":  # Original RoBERTa (commented out)
-                    encoded_text = self.text_backbone(**tokenized_queries)
-                    text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
-                    text_features = encoded_text.last_hidden_state
-                    text_sentence_features = encoded_text.pooler_output
                 else:
-                    raise NotImplementedError
+                    # Models with pooler: TinyBERT, TiTe-LATE, RoBERTa
+                    text_sentence_features = encoded_text.pooler_output
         else:
             tokenized_queries = self.tokenizer(texts).to(device)
-            if self.text_backbone_name == "MiniLM":
-                encoded_text = self.text_backbone(**tokenized_queries)
-                text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
-                text_features = encoded_text.last_hidden_state
-                # MiniLM uses mean pooling for sentence embeddings
+            encoded_text = self.text_backbone(**tokenized_queries)
+            text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
+            text_features = encoded_text.last_hidden_state
+            
+            # Choose pooling strategy based on model type
+            if self.use_mean_pooling:
+                # Models without pooler: MiniLM, DistilBERT
                 text_sentence_features = self._mean_pooling(encoded_text.last_hidden_state, 
                                                              tokenized_queries.attention_mask)
-            elif self.text_backbone_name == "Roberta":  # Original RoBERTa (commented out)
-                encoded_text = self.text_backbone(**tokenized_queries)
-                text_pad_mask = tokenized_queries.attention_mask.ne(1).bool()
-                text_features = encoded_text.last_hidden_state
-                text_sentence_features = encoded_text.pooler_output
             else:
-                raise NotImplementedError
+                # Models with pooler: TinyBERT, TiTe-LATE, RoBERTa
+                text_sentence_features = encoded_text.pooler_output
 
         return text_features, text_sentence_features, text_pad_mask
     
