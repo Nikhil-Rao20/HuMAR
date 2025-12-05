@@ -24,6 +24,10 @@ from util.misc import NestedTensor, clean_state_dict, is_main_process
 
 from ..position_encoding import build_position_encoding
 from .swin_transformer import build_swin_transformer
+from .segformer import build_segformer_backbone, SEGFORMER_SPECS
+from .mobilevit import build_mobilevit_backbone, MOBILEVIT_SPECS
+from .efficientformer import build_efficientformerv2_backbone, EFFICIENTFORMERV2_SPECS
+from .poolformer import build_poolformer_backbone, POOLFORMER_SPECS
 
 
 class FrozenBatchNorm2d(torch.nn.Module):
@@ -154,6 +158,47 @@ def build_backbone(args):
         _tmp_st = OrderedDict({k:v for k, v in clean_state_dict(checkpoint).items() if key_select_function(k)})
         _tmp_st_output = backbone.load_state_dict(_tmp_st, strict=False)
         bb_num_channels = backbone.num_features[4 - len(return_interm_indices):]
+    
+    elif args.backbone in SEGFORMER_SPECS.keys():
+        backbone = build_segformer_backbone(args.backbone, pretrained=True, out_indices=tuple(return_interm_indices))
+        if backbone_freeze_keywords is not None:
+            for name, parameter in backbone.named_parameters():
+                for keyword in backbone_freeze_keywords:
+                    if keyword in name:
+                        parameter.requires_grad_(False)
+                        break
+        bb_num_channels = [backbone.num_features[i] for i in return_interm_indices]
+    
+    elif args.backbone in MOBILEVIT_SPECS.keys():
+        backbone = build_mobilevit_backbone(args.backbone, pretrained=True, out_indices=tuple(return_interm_indices))
+        if backbone_freeze_keywords is not None:
+            for name, parameter in backbone.named_parameters():
+                for keyword in backbone_freeze_keywords:
+                    if keyword in name:
+                        parameter.requires_grad_(False)
+                        break
+        bb_num_channels = [backbone.num_features[i] for i in return_interm_indices]
+    
+    elif args.backbone in EFFICIENTFORMERV2_SPECS.keys():
+        backbone = build_efficientformerv2_backbone(args.backbone, pretrained=True, out_indices=tuple(return_interm_indices))
+        if backbone_freeze_keywords is not None:
+            for name, parameter in backbone.named_parameters():
+                for keyword in backbone_freeze_keywords:
+                    if keyword in name:
+                        parameter.requires_grad_(False)
+                        break
+        bb_num_channels = [backbone.num_features[i] for i in return_interm_indices]
+    
+    elif args.backbone in POOLFORMER_SPECS.keys():
+        backbone = build_poolformer_backbone(args.backbone, pretrained=True, out_indices=tuple(return_interm_indices))
+        if backbone_freeze_keywords is not None:
+            for name, parameter in backbone.named_parameters():
+                for keyword in backbone_freeze_keywords:
+                    if keyword in name:
+                        parameter.requires_grad_(False)
+                        break
+        bb_num_channels = [backbone.num_features[i] for i in return_interm_indices]
+    
     else:
         raise NotImplementedError("Unknown backbone {}".format(args.backbone))
 
