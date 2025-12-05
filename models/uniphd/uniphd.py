@@ -25,6 +25,7 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list, inverse_sig
 
 from .backbones import build_backbone
 from .transformer import build_transformer
+from .efficient_conv_attention import build_efficient_conv_attention_transformer
 from .utils import MLP
 from .postprocesses import PostProcess, PostProcessPose, PostProcessSegm
 from .criterion import SetCriterion
@@ -210,6 +211,8 @@ class UniPHD(nn.Module):
             self.transformer.enc_out_class_embed = copy.deepcopy(_class_embed)
 
         self._reset_parameters()
+        from torchinfo import summary
+        print(summary(self.transformer))
 
     def _reset_parameters(self):
         # init input_proj
@@ -615,7 +618,8 @@ def build_uniphd(args):
     device = torch.device(args.device)
 
     backbone = build_backbone(args)
-    transformer = build_transformer(args)
+    # transformer = build_transformer(args)
+    transformer = build_efficient_conv_attention_transformer(args)
     
     # Build matcher
     from .matcher import build_matcher

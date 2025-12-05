@@ -3,3 +3,12 @@
 3) replace visual encoder with YoloV11 backbone or Conv+Attention Blocks
 4) Replace text encoder with smaller one and newest
 5) integrate axial compression in the multimodal encoder
+
+DeformableTransformerEncoderLayer: 756k
+DeformableTransformerDecoderLayer: 1.2M
+VisionLanguageFusionModule: 526k
+ModuleList (input_proj): 2.1M
+MSO (Decoder): 50k
+KPS & BOX Single MLP Layer: 132k
+KPS & BOX 6 Layers MLP Layers: 792k
+Transformer: 27M (Total 6DTEL, 6DTDL, 792k, Additional)

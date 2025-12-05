@@ -39,7 +39,7 @@ class TextEncoder(nn.Module):
         super(TextEncoder, self).__init__()
         self.args = args
         self.hidden_dim = args.hidden_dim
-        self.text_backbone_name = "DistilBERT"  # Options: "MiniLM", "DistilBERT", "TinyBERT", "TiTeLATE", "Roberta"
+        self.text_backbone_name = "TinyBERT"  # Options: "MiniLM", "DistilBERT", "TinyBERT", "TiTeLATE", "Roberta"
         self.token_size = 32
         
         if self.text_backbone_name == "MiniLM":
