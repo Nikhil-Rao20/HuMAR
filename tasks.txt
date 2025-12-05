@@ -1,0 +1,5 @@
+1) Replace the current attention mechanisms with Conv+Semi attention layers
+2) replace the graph neural network with series of CNNs or combo of CNN + attention
+3) replace visual encoder with YoloV11 backbone or Conv+Attention Blocks
+4) Replace text encoder with smaller one and newest
+5) integrate axial compression in the multimodal encoder
