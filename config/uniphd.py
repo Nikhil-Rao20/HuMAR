@@ -27,6 +27,7 @@ return_interm_indices = [0, 1, 2, 3]
 backbone_freeze_keywords = None
 
 # for transformer
+transformer_type = 'fully_conv'  # Options: 'original' (27M), 'efficient' (5M), 'fully_conv' (2-3M)
 hidden_dim = 256
 dropout = 0.0
 dim_feedforward = 2048

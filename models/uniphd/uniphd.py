@@ -26,6 +26,8 @@ from util.misc import (NestedTensor, nested_tensor_from_tensor_list, inverse_sig
 from .backbones import build_backbone
 from .transformer import build_transformer
 from .efficient_conv_attention import build_efficient_conv_attention_transformer
+from .fully_convolutional import build_fully_convolutional_transformer
+from .fully_convolutional_optim import build_fully_convolutional_optim_transformer
 from .utils import MLP
 from .postprocesses import PostProcess, PostProcessPose, PostProcessSegm
 from .criterion import SetCriterion
@@ -618,8 +620,23 @@ def build_uniphd(args):
     device = torch.device(args.device)
 
     backbone = build_backbone(args)
-    # transformer = build_transformer(args)
-    transformer = build_efficient_conv_attention_transformer(args)
+    
+    # Select transformer architecture
+    transformer_type = getattr(args, 'transformer_type', 'fully_conv')  # Default: fully_conv
+    if transformer_type == 'original':
+        print("Using ORIGINAL Transformer")
+        transformer = build_transformer(args)
+    elif transformer_type == 'efficient':
+        print("Using EFFICIENT Conv+Attention Transformer")
+        transformer = build_efficient_conv_attention_transformer(args)
+    elif transformer_type == 'fully_conv':
+        print("Using FULLY CONVOLUTIONAL Transformer")
+        transformer = build_fully_convolutional_transformer(args)
+    elif transformer_type == 'fully_conv_optim':
+        print("Using Optimized FULLY CONVOLUTIONAL Transfomer")
+        transformer = build_fully_convolutional_optim_transformer(args)
+    else:
+        raise ValueError(f"Unknown transformer_type: {transformer_type}. Choose: 'original', 'efficient', 'fully_conv', 'fully_conv_optim'")
     
     # Build matcher
     from .matcher import build_matcher

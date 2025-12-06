@@ -1,6 +1,17 @@
 # Changes and Updates Log - UniPHD Model
 ---
 
+## December 06, 2025 - Added Fully Convolutional Blocks Replacing the Original Transformer
+**Change:** Added Fully Convolutional Blocks Transformers
+
+**Details:** The new fully convolutional blocks have been integrated into the model architecture to enhance the processing of spatial information. These blocks replace traditional transformer components, allowing for more efficient handling of image data.
+
+**Parameters:**
+- **Fully Convolutional Block :** 12M parameters
+- **Fully Convolutional Block Optim:** 6M parameters
+
+These blocks are designed to improve the model's performance on tasks requiring detailed spatial understanding, such as human mesh recovery, while maintaining a lightweight architecture suitable for real-time applications.
+
 ## December 05, 2025 - Added Various VIT based Backbones with Swin Transformer
 
 **Change:** Extended Visual encoder options
