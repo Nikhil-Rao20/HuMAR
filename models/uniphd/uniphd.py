@@ -214,7 +214,7 @@ class UniPHD(nn.Module):
 
         self._reset_parameters()
         from torchinfo import summary
-        print(summary(self.transformer))
+        # print(summary(self.transformer))
 
     def _reset_parameters(self):
         # init input_proj

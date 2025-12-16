@@ -1,6 +1,10 @@
 # Changes and Updates Log - UniPHD Model
 ---
 
+## December 16, 2025 - Command to run the training
+
+`C:/Users/nikhi/AppData/Local/Programs/Python/Python312/python.exe main.py --config_file config/uniphd.py --coco_path datasets/RefHuman_Small --backbone swin_T_224_1k  --output_dir results/UniPHD_SegFormer_B0 --device cuda --num_workers 2 --swin_pretrain_path datasets/RefHuman_Small`
+
 ## December 06, 2025 - Added Fully Convolutional Blocks Replacing the Original Transformer
 **Change:** Added Fully Convolutional Blocks Transformers
 
