@@ -5,8 +5,10 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import timm
-from typing import List
+from typing import List, Dict
+from util.misc import NestedTensor
 
 
 class MobileViTBackbone(nn.Module):
@@ -50,15 +52,28 @@ class MobileViTBackbone(nn.Module):
         print(f"Loaded {model_name} backbone")
         print(f"Output channels per stage: {self.num_features}")
     
-    def forward(self, x):
+    def forward(self, tensor_list: NestedTensor):
         """
         Args:
-            x: Input tensor [B, C, H, W]
+            tensor_list: NestedTensor containing tensors and mask
         Returns:
-            List of feature maps from selected stages
+            Dict of NestedTensor feature maps from selected stages
         """
+        # Extract the actual tensor from NestedTensor
+        x = tensor_list.tensors
+        mask = tensor_list.mask
+        
+        # Forward through backbone
         features = self.backbone(x)
-        return features
+        
+        # Convert features to NestedTensor format with interpolated masks
+        out: Dict[str, NestedTensor] = {}
+        for idx, feat in enumerate(features):
+            # Interpolate mask to match feature size
+            m = F.interpolate(mask[None].float(), size=feat.shape[-2:]).to(torch.bool)[0]
+            out[str(idx)] = NestedTensor(feat, m)
+        
+        return out
 
 
 def build_mobilevit_backbone(model_name='mobilevit_s', pretrained=True, out_indices=(0, 1, 2, 3), **kwargs):
