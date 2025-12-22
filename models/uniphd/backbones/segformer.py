@@ -5,8 +5,10 @@
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from transformers import SegformerModel
-from typing import List
+from typing import List, Dict
+from util.misc import NestedTensor
 
 
 class SegFormerBackbone(nn.Module):
@@ -54,13 +56,17 @@ class SegFormerBackbone(nn.Module):
         print(f"Loaded SegFormer {model_name} backbone from Hugging Face")
         print(f"Output channels per stage: {self.num_features}")
     
-    def forward(self, x):
+    def forward(self, tensor_list: NestedTensor):
         """
         Args:
-            x: Input tensor [B, C, H, W]
+            tensor_list: NestedTensor containing tensors and mask
         Returns:
-            List of feature maps from selected stages
+            Dict of NestedTensor feature maps from selected stages
         """
+        # Extract the actual tensor from NestedTensor
+        x = tensor_list.tensors
+        mask = tensor_list.mask
+        
         # Get outputs from SegFormer encoder
         outputs = self.backbone(pixel_values=x, output_hidden_states=True, return_dict=True)
         
@@ -68,9 +74,9 @@ class SegFormerBackbone(nn.Module):
         # hidden_states: (patch_embeddings, stage_1, stage_2, stage_3, stage_4)
         hidden_states = outputs.hidden_states
         
-        # Convert from (B, H*W, C) to (B, C, H, W) format
-        features = []
-        for idx in self.out_indices:
+        # Convert from (B, H*W, C) to (B, C, H, W) format and create NestedTensor
+        out: Dict[str, NestedTensor] = {}
+        for i, idx in enumerate(self.out_indices):
             # Get feature at this stage (add 1 to skip patch embeddings)
             feat = hidden_states[idx + 1]
             B, N, C = feat.shape
@@ -80,9 +86,12 @@ class SegFormerBackbone(nn.Module):
             
             # Reshape: (B, H*W, C) -> (B, C, H, W)
             feat = feat.permute(0, 2, 1).reshape(B, C, H, W)
-            features.append(feat)
+            
+            # Interpolate mask to match feature size
+            m = F.interpolate(mask[None].float(), size=feat.shape[-2:]).to(torch.bool)[0]
+            out[str(i)] = NestedTensor(feat, m)
         
-        return features
+        return out
 
 
 def build_segformer_backbone(model_name='segformer_mit_b0', pretrained=True, out_indices=(0, 1, 2, 3), **kwargs):
