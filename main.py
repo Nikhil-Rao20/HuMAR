@@ -45,12 +45,12 @@ def get_args_parser():
     parser.add_argument('--no_mask', action='store_true', default=False)
 
     parser.add_argument('--backbone', type=str, default='swin_T_224_1k')
-    parser.add_argument('--swin_pretrain_path', type=str, default='../pretrained_backbones')
+    parser.add_argument('--swin_pretrain_path', type=str, default='datasets/RefHuman_Small')
     # dataset parameters
     parser.add_argument('--dataset_file', default='refhuman')
-    parser.add_argument('--coco_path', type=str, default="../datasets/RefHuman")
+    parser.add_argument('--coco_path', type=str, default="")
     parser.add_argument('--remove_difficult', action='store_true')
-
+    
     # training parameters
     parser.add_argument('--output_dir', default='./results/UniPHD_Results', help='path where to save')
     parser.add_argument('--note', default='', help='add some notes to the experiment')
