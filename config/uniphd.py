@@ -11,7 +11,7 @@ lr_text_encoder = 0.0001
 lr_text_encoder_names = ['text_encoder']
 batch_size = 4
 weight_decay = 0.0001
-epochs = 1
+epochs = 20
 lr_drop = 18
 save_checkpoint_interval = 5
 clip_max_norm = 0.1
@@ -27,7 +27,7 @@ return_interm_indices = [0, 1, 2, 3]
 backbone_freeze_keywords = None
 
 # for transformer
-transformer_type = 'original'  # Options: 'original' (27M), 'efficient' (5M), 'fully_conv' (2-3M)
+transformer_type = 'efficient'  # Options: 'original' (27M), 'efficient' (5M), 'fully_conv' (2-3M)
 hidden_dim = 256
 dropout = 0.0
 dim_feedforward = 2048

@@ -252,10 +252,26 @@ class EfficientDecoderLayer(nn.Module):
         tgt_pose = self.across_norm(tgt_pose)
         
         # 3. Cross-attention to memory features
-        tgt_flat = tgt_pose.reshape(Q * B * N, 1, C).transpose(0, 1)  # [1, Q*B*N, C]
-        memory_reshaped = memory.unsqueeze(1).expand(-1, Q * B * N, -1)  # [M, Q*B*N, C]
-        cross_out, _ = self.cross_attn(tgt_flat, memory_reshaped, memory_reshaped)
-        cross_out = cross_out.transpose(0, 1).reshape(Q, B, N, C)
+        # Handle memory shape - may be [M, B, C] or [M, B, L, C] where L is num_levels
+        if memory.dim() == 4:
+            # memory is [M, B, L, C] - collapse level dimension
+            memory = memory.mean(dim=2)  # [M, B, C]
+        
+        # memory is now [M, B, C] where M = sum(H*W)
+        M, B_mem, C_mem = memory.shape
+        
+        # For efficient cross-attention, we process all queries together
+        # Reshape tgt_pose: [Q, B, N, C] -> [Q*N, B, C] for batch-wise attention
+        tgt_flat = tgt_pose.permute(0, 2, 1, 3).reshape(Q * N, B, C)  # [Q*N, B, C]
+        
+        # Memory is [M, B, C] - already in correct format for cross attention
+        # Cross attention: query attends to memory
+        # query: [Q*N, B, C], key/value: [M, B, C]
+        cross_out, _ = self.cross_attn(tgt_flat, memory, memory)  # [Q*N, B, C]
+        
+        # Reshape back to [Q, B, N, C]
+        cross_out = cross_out.reshape(Q, N, B, C).permute(0, 2, 1, 3)  # [Q, B, N, C]
+        
         tgt_pose = tgt_pose + self.cross_dropout(cross_out)
         tgt_pose = self.cross_norm(tgt_pose)
         

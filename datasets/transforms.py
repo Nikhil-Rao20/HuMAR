@@ -275,6 +275,13 @@ class RandomErasing(object):
 
 def are_points_within_mask(mask, points):
     h, w = mask.shape[-2:]
+    # Convert points to numpy array of integers for indexing
+    if hasattr(points, 'numpy'):
+        points = points.numpy()
+    points = np.array(points).astype(np.int32)
+    # Clamp points to valid range
+    points[:, 0] = np.clip(points[:, 0], 0, w - 1)
+    points[:, 1] = np.clip(points[:, 1], 0, h - 1)
     return points[:, 1].max() < h and points[:, 0].max() < w and np.all(mask[points[:, 1], points[:, 0]] > 0)
 
 class Normalize(object):
