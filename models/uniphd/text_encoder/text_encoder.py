@@ -11,6 +11,8 @@ from models.uniphd.text_encoder.tokenizer import (
     DistilBERTTokenizer, 
     TinyBERTTokenizer, 
     TiTeLATETokenizer,
+    ALBERTTokenizer,
+    MobileBERTTokenizer,
     RobertaTokenizer  # Original (commented out)
 )
 
@@ -39,7 +41,7 @@ class TextEncoder(nn.Module):
         super(TextEncoder, self).__init__()
         self.args = args
         self.hidden_dim = args.hidden_dim
-        self.text_backbone_name = "MiniLM"  # Options: "MiniLM", "DistilBERT", "TinyBERT", "TiTeLATE", "Roberta"
+        self.text_backbone_name = "ALBERT"  # Options: MiniLM, TinyBERT, ALBERT, MobileBERT, DistilBERT, TiTeLATE, Roberta'
         self.token_size = 32
         
         if self.text_backbone_name == "MiniLM":
@@ -63,6 +65,20 @@ class TextEncoder(nn.Module):
             self.feat_dim = 312  # TinyBERT output dimension
             self.use_mean_pooling = False  # TinyBERT has pooler
             
+        elif self.text_backbone_name == "ALBERT":
+            # Using albert/albert-base-v2 (11.8M params, 768 dim with 128 embedding dim)
+            self.text_backbone = AutoModel.from_pretrained("albert/albert-base-v2")
+            self.tokenizer = ALBERTTokenizer()
+            self.feat_dim = 768  # ALBERT hidden dimension
+            self.use_mean_pooling = False  # ALBERT has pooler
+            
+        elif self.text_backbone_name == "MobileBERT":
+            # Using google/mobilebert-uncased (25M params, 512 dim)
+            self.text_backbone = AutoModel.from_pretrained("google/mobilebert-uncased")
+            self.tokenizer = MobileBERTTokenizer()
+            self.feat_dim = 512  # MobileBERT output dimension
+            self.use_mean_pooling = False  # MobileBERT has pooler
+            
         elif self.text_backbone_name == "TiTeLATE":
             # Using webis/tite-2-late-msmarco (lightweight BERT variant, 768 dim)
             self.text_backbone = AutoModel.from_pretrained("webis/tite-2-late-msmarco")
@@ -77,7 +93,7 @@ class TextEncoder(nn.Module):
             self.feat_dim = 768
             self.use_mean_pooling = False
         else:
-            assert False, f'error: Text Encoder "{self.text_backbone_name}" is not supported'
+            assert False, f'error: Text Encoder "{self.text_backbone_name}" is not supported. Supported: MiniLM, TinyBERT, ALBERT, MobileBERT, DistilBERT, TiTeLATE, Roberta'
 
         self.freeze_text_encoder = args.freeze_text_encoder
         if self.freeze_text_encoder:

@@ -214,6 +214,40 @@ class TiTeLATETokenizer(nn.Module):
         )
 
 
+class ALBERTTokenizer(nn.Module):
+    """Tokenizer for ALBERT (albert/albert-base-v2)"""
+    def __init__(self):
+        super(ALBERTTokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("albert/albert-base-v2")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts,
+            padding='longest',
+            max_length=512,  # ALBERT max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
+class MobileBERTTokenizer(nn.Module):
+    """Tokenizer for MobileBERT (google/mobilebert-uncased)"""
+    def __init__(self):
+        super(MobileBERTTokenizer, self).__init__()
+        from transformers import AutoTokenizer
+        self.tokenizer = AutoTokenizer.from_pretrained("google/mobilebert-uncased")
+
+    def forward(self, texts):
+        return self.tokenizer.batch_encode_plus(
+            texts,
+            padding='longest',
+            max_length=512,  # MobileBERT max length
+            truncation=True,
+            return_tensors='pt'
+        )
+
+
 _tokenizer = SimpleTokenizer()
 # example: word_vec = tokenize(["a photo of cat", "a dog"], self.word_length, True).squeeze(0)
 def tokenize(texts: Union[str, List[str]],

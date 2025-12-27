@@ -19,6 +19,7 @@ import math
 import torch
 import torch.nn.functional as F
 from torch import nn
+import time  # Add time import for timing instrumentation
 
 from util.keypoint_ops import keypoint_xyzxyz_to_xyxyzz
 from util.misc import (NestedTensor, nested_tensor_from_tensor_list, inverse_sigmoid)
@@ -90,6 +91,7 @@ class UniPHD(nn.Module):
                 output_feat_size=hidden_dim,
                 dropout=0.1,
             )
+            
         # Prompt Encode
         if 'scribble' in self.args.train_trigger or 'point' in self.args.train_trigger or 'bbox' in self.args.train_trigger:
             print("********** Enabling Positional Prompt ***************\n")
@@ -262,6 +264,10 @@ class UniPHD(nn.Module):
         return points_repeated.detach()
 
     def forward(self, samples: NestedTensor, targets=None):
+        # ============ TIMING INSTRUMENTATION START ============
+        forward_start_time = time.time()
+        timing_log = {}
+        
         if 'caption' in targets[0]:
             captions = [t['caption'] for t in targets]
         if isinstance(samples, (list, torch.Tensor)):
@@ -270,7 +276,12 @@ class UniPHD(nn.Module):
         b = samples.tensors.shape[0]
 
         # visual encode
+        backbone_start = time.time()
         features, poss = self.backbone(samples)
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        backbone_time = time.time() - backbone_start
+        timing_log['1_backbone'] = backbone_time
+        
         features_4x, poss_4x = features[0], poss[0]
         features, poss = features[1:], poss[1:]
 
@@ -279,10 +290,20 @@ class UniPHD(nn.Module):
         if (seed_ < 1 / 2 and self.training and 'text' in self.args.train_trigger) or \
                 (self.training and self.args.train_trigger == 'text') or (not self.training and self.args.eval_trigger == 'text'):
             prompt_type = "text"
+            
+            # Text encoder timing
+            text_encoder_start = time.time()
             text_features, text_sentence_features = self.forward_text(captions, device=poss[0].device)
+            torch.cuda.synchronize() if torch.cuda.is_available() else None
+            text_encoder_time = time.time() - text_encoder_start
+            timing_log['2_text_encoder'] = text_encoder_time
+            
+            text_pos_start = time.time()
             text_pos = self.text_pos(text_features).permute(2, 0, 1)  # [length, batch_size, c]
             text_word_features, text_word_masks = text_features.decompose()
             text_word_features = text_word_features.permute(1, 0, 2)  # [length, batch_size, c]
+            torch.cuda.synchronize() if torch.cuda.is_available() else None
+            timing_log['3_text_pos_encoding'] = time.time() - text_pos_start
         else:
             prompt_type = "visual"
             scribbles, points = None, None
@@ -308,6 +329,7 @@ class UniPHD(nn.Module):
             text_word_features, text_pos = text_word_features.transpose(0, 1), text_pos.transpose(0, 1)
 
         # multimodal fusion
+        fusion_start = time.time()
         srcs = []
         masks = []
         poses = []
@@ -354,13 +376,19 @@ class UniPHD(nn.Module):
                 srcs.append(src)
                 masks.append(mask)
                 poses.append(pos_l)
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        timing_log['4_multimodal_fusion'] = time.time() - fusion_start
 
         # multimodal encoding & pose-centric hierarchical decoder
+        transformer_start = time.time()
         with autocast(enabled=False):
             text_embed = repeat(text_sentence_features, 'b c -> b q c', q=self.num_queries).unsqueeze(-2)
             hs_pose, refpoint_pose, mix_refpoint, mix_embedding, memory = self.transformer(srcs, masks, poses, text_embed)
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        timing_log['5_transformer'] = time.time() - transformer_start
 
         # heads
+        heads_start = time.time()
         outputs_class=[]
         outputs_box=[]
         outputs_keypoints_list = []
@@ -387,12 +415,17 @@ class UniPHD(nn.Module):
             layer_box = layer_bbox_embed(hs_pose_i[:, :, 0])
             layer_box[..., :2] += inverse_sigmoid(refpoint_pose_i[:, :, 0])
             outputs_box.append(layer_box.sigmoid())
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        timing_log['6_prediction_heads'] = time.time() - heads_start
 
+        # Output preparation
+        output_prep_start = time.time()
         out = {'pred_logits': outputs_class[-1], 'pred_keypoints': outputs_keypoints_list[-1],
                'pred_keypoints_visi': outputs_keypoints_visi_list[-1], 'pred_boxes': outputs_box[-1]}
 
         # Add Hungarian matching indices for criterion
         if self.training or targets is not None:
+            matching_start = time.time()
             with torch.no_grad():
                 outputs_without_aux = {k: v for k, v in out.items() if k != 'aux_outputs'}
                 main_indices = self.matcher(outputs_without_aux, targets)
@@ -407,8 +440,11 @@ class UniPHD(nn.Module):
                         aux_indices.append(aux_idx)
                     out['aux_outputs'] = aux_outputs
                     out['aux_indices'] = aux_indices
+            torch.cuda.synchronize() if torch.cuda.is_available() else None
+            timing_log['7_hungarian_matching'] = time.time() - matching_start
 
         if self.mask_pred:
+            mask_start = time.time()
             tar_h, tar_w = memory[0].shape[-2:]
             mask_features = sum([F.interpolate(x, size=(tar_h, tar_w), mode="bicubic", align_corners=False) for x in memory])  # b c h w
             bs, nq, np = refpoint_pose[-2].shape
@@ -425,10 +461,36 @@ class UniPHD(nn.Module):
                 outputs_seg_mask_high = rearrange(F.pixel_shuffle(outputs_seg_mask_high, 4).squeeze(1), '(b q) h w -> b q h w', b=b, q=1)
                 pred_masks.append(outputs_seg_mask_high)
             pred_masks = torch.cat(pred_masks, dim=1)
+            torch.cuda.synchronize() if torch.cuda.is_available() else None
+            timing_log['8_mask_prediction'] = time.time() - mask_start
         else:
             pred_masks = torch.ones((b, self.num_queries, init_h, init_w), device=out['pred_logits'].device).float()
         out['pred_masks'] = pred_masks
         out['padded_hw'] = (init_h, init_w)
+        timing_log['9_output_prep'] = time.time() - output_prep_start
+        
+        # Total time
+        torch.cuda.synchronize() if torch.cuda.is_available() else None
+        total_time = time.time() - forward_start_time
+        timing_log['0_TOTAL_FORWARD'] = total_time
+        
+        # ============ PRINT TIMING BREAKDOWN ============
+        print("\n" + "="*70)
+        print("⏱️  INFERENCE TIMING BREAKDOWN (ms)")
+        print("="*70)
+        for key in sorted(timing_log.keys()):
+            time_ms = timing_log[key] * 1000
+            percentage = (timing_log[key] / total_time) * 100 if total_time > 0 else 0
+            if key == '0_TOTAL_FORWARD':
+                print(f"{'='*70}")
+                print(f"{key.replace('0_', '').replace('_', ' ').upper():<40} {time_ms:>8.2f} ms  (100.00%)")
+                print(f"{'='*70}")
+            else:
+                bar_length = int(percentage / 2)  # Scale to 50 chars max
+                bar = '█' * bar_length + '░' * (50 - bar_length)
+                component_name = key[2:].replace('_', ' ').title()
+                print(f"{component_name:<30} {time_ms:>8.2f} ms  ({percentage:>5.1f}%) {bar}")
+        print(f"{'='*70}\n")
 
         return out
 
@@ -620,6 +682,8 @@ def build_uniphd(args):
     device = torch.device(args.device)
 
     backbone = build_backbone(args)
+    from torchinfo import summary
+    print("Backbone Summary: ", summary(backbone))
     
     # Select transformer architecture
     transformer_type = getattr(args, 'transformer_type', 'fully_conv')  # Default: fully_conv
